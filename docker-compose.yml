@@ -1,0 +1,32 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: expense_mysql_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  web:
+    build: .
+    container_name: expense_streamlit_app
+    restart: always
+    ports:
+      - "8501:8501"
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - DB_HOST=${DB_HOST}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+    depends_on:
+      - db
+
+volumes:
+  mysql_data:
