@@ -5,12 +5,37 @@ from google import genai
 from google.genai import types
 from database import init_db, registrar_gasto, consultar_gastos_totales
 
+# Inicializar Base de Datos
 init_db()
 
+# Configurar Cliente de Gemini API
 api_key = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
 
-PRIMARY_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+PRIMARY_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.8-flash")
+FALLBACK_MODEL = "gemini-3.5-flash"
+
+def generate_content_with_fallback(contents, config):
+    """
+    Intenta generar contenido con el modelo principal.
+    Si falla por sobrecarga (503 / UNAVAILABLE), intenta con el modelo de respaldo.
+    """
+    try:
+        return client.models.generate_content(
+            model=PRIMARY_MODEL,
+            contents=contents,
+            config=config
+        )
+    except Exception as e:
+        err_msg = str(e)
+        if "503" in err_msg or "UNAVAILABLE" in err_msg:
+            # Reintentar con el modelo de respaldo
+            return client.models.generate_content(
+                model=FALLBACK_MODEL,
+                contents=contents,
+                config=config
+            )
+        raise e
 
 st.set_page_config(page_title="AI Expense Agent", page_icon="💰")
 st.title("🤖 AI Expense Agent & Assistant")
@@ -51,11 +76,8 @@ if prompt:
 
     bot_reply = ""
     try:
-        response = client.models.generate_content(
-            model=PRIMARY_MODEL,
-            contents=prompt,
-            config=config
-        )
+        # Primer llamado con fallback automático
+        response = generate_content_with_fallback(prompt, config)
 
         if response.function_calls:
             messages_contents = [
@@ -81,11 +103,8 @@ if prompt:
 
             messages_contents.append(types.Content(role="user", parts=tool_response_parts))
 
-            second_response = client.models.generate_content(
-                model=PRIMARY_MODEL,
-                contents=messages_contents,
-                config=config
-            )
+            # Segundo llamado (retorno del tool) con fallback automático
+            second_response = generate_content_with_fallback(messages_contents, config)
             bot_reply = second_response.text if second_response.text else "Operación completada."
         elif response.text:
             bot_reply = response.text
