@@ -1,13 +1,24 @@
-import mysql.connector
 import os
 from typing import Optional
+import mysql.connector
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def get_connection():
+    db_host = os.getenv("DB_HOST", "db")
+    db_user = os.getenv("DB_USER")
+    db_password = os.getenv("DB_PASSWORD")
+    db_name = os.getenv("DB_NAME")
+
+    if not all([db_user, db_password, db_name]):
+        raise ValueError("❌ Faltan definir variables de entorno (DB_USER, DB_PASSWORD, DB_NAME) en el archivo .env")
+
     return mysql.connector.connect(
-        host=os.getenv("DB_HOST", "db"),
-        user=os.getenv("DB_USER", "expense_user"),
-        password=os.getenv("DB_PASSWORD", "expense_secret_pass"),
-        database=os.getenv("DB_NAME", "expenses_db")
+        host=db_host,
+        user=db_user,
+        password=db_password,
+        database=db_name
     )
 
 def init_db():
@@ -46,16 +57,16 @@ def registrar_gasto(monto: float, descripcion: str, categoria: str, subcategoria
 
 def consultar_gastos_totales(fecha_inicio: Optional[str] = None, fecha_fin: Optional[str] = None, categoria: Optional[str] = None):
     """
-    Consulta y recupera el listado completo y detallado de cada gasto en la base de datos, 
+    Consulta y recupera el listado completo y detallado de cada gasto en la base de datos,
     incluyendo la fecha exacta (YYYY-MM-DD), descripcion, categoria, subcategoria, tipo y monto.
     Permite filtrar por fecha_inicio, fecha_fin y categoria.
     """
     conn = get_connection()
     cursor = conn.cursor(dictionary=True)
-    
+
     query = "SELECT id, fecha, descripcion, categoria, subcategoria, tipo, monto FROM expenses WHERE 1=1"
     params = []
-    
+
     if fecha_inicio:
         query += " AND fecha >= %s"
         params.append(fecha_inicio)
@@ -65,17 +76,17 @@ def consultar_gastos_totales(fecha_inicio: Optional[str] = None, fecha_fin: Opti
     if categoria:
         query += " AND categoria = %s"
         params.append(categoria)
-        
+
     query += " ORDER BY fecha DESC, id DESC"
-    
+
     cursor.execute(query, params)
     registros = cursor.fetchall()
     cursor.close()
     conn.close()
-    
+
     if not registros:
         return "No se encontraron gastos registrados para los criterios especificados."
-        
+
     resultado = "LISTA DE GASTOS DETALLADA:\n"
     total = 0.0
     for r in registros:
@@ -83,6 +94,6 @@ def consultar_gastos_totales(fecha_inicio: Optional[str] = None, fecha_fin: Opti
         monto_val = float(r['monto'])
         resultado += f"Fecha: {fecha_str} | ID: {r['id']} | Descripcion: {r['descripcion']} | Categoria: {r['categoria']} | Subcategoria: {r['subcategoria']} | Tipo: {r['tipo']} | Monto: S/ {monto_val:.2f}\n"
         total += monto_val
-        
+
     resultado += f"\nTotal Acumulado: S/ {total:.2f}"
     return resultado
